@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>토토노이 타이머</title>
+<style>
+  :root {
+    --text: #fff; --muted: rgba(255,255,255,.66); --glass: rgba(255,255,255,.08);
+    --glass-line: rgba(255,255,255,.14); --track: rgba(255,255,255,.14);
+    --c-sauna: #ff9a4d; --c-cold: #6fd3ff; --c-rest: #8fe08a;
+  }
+  body[data-phase="sauna"] { --accent: var(--c-sauna); --sand: #f0b462; --sand-hi: #ffd79a; }
+  body[data-phase="cold"]  { --accent: var(--c-cold);  --sand: #d6f0ff; --sand-hi: #ffffff; }
+  body[data-phase="rest"]  { --accent: var(--c-rest);  --sand: #d4e3a0; --sand-hi: #f3ffd0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: #0c0806; color: var(--text); overflow-x: hidden;
+    font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    display: flex; justify-content: center; padding: 28px 16px 48px; min-height: 100vh;
+  }
+
+  /* ================= 배경 장면 ================= */
+  #scenes { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .scene { position: absolute; inset: 0; opacity: 0; transition: opacity 2s ease; overflow: hidden; }
+  .scene.on { opacity: 1; }
+  .p { position: absolute; will-change: transform, opacity; }
+
+  /* --- 핀란드 사우나: 나무 벽, 스토브 불빛, 증기 --- */
+  .scene.sauna {
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 1px, transparent 1px 170px),
+      repeating-linear-gradient(0deg, #4a2c17 0 54px, #3d2312 54px 56px, #2a170b 56px 58px),
+      #3d2312;
+  }
+  .scene.sauna::before {
+    content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent 0 9px, rgba(255,200,140,.025) 9px 10px, transparent 10px 23px);
+  }
+  .scene.sauna::after {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 90% 45% at 50% 108%, rgba(255,110,30,.65), rgba(255,80,20,.15) 55%, transparent 75%),
+      radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(10,4,0,.65) 100%);
+    animation: stove 5s ease-in-out infinite;
+  }
+  @keyframes stove { 0%,100% { opacity: .85; } 50% { opacity: 1; } 70% { opacity: .9; } }
+  .steam {
+    bottom: -25vh; border-radius: 50%; filter: blur(24px);
+    background: radial-gradient(circle, rgba(255,238,220,.30), transparent 65%);
+    animation: steam var(--d) linear infinite; animation-delay: var(--dl);
+  }
+  @keyframes steam {
+    0% { transform: translate(0,0) scale(.5); opacity: 0; }
+    15% { opacity: 1; }
+    100% { transform: translate(var(--dx), -135vh) scale(1.8); opacity: 0; }
+  }
+  .ember {
+    bottom: -2vh; width: 3px; height: 3px; border-radius: 50%; background: #ffc070;
+    box-shadow: 0 0 6px 1px #ff7b00; z-index: 2;
+    animation: ember var(--d) ease-out infinite; animation-delay: var(--dl);
+  }
+  @keyframes ember {
+    0% { transform: translate(0,0); opacity: 0; }
+    10% { opacity: 1; } 50% { opacity: .5; } 60% { opacity: 1; }
+    100% { transform: translate(var(--dx), -55vh); opacity: 0; }
+  }
+
+  /* --- 콜드 플런지: 깊은 얼음물, 물결 빛, 기포 --- */
+  .scene.cold { background: linear-gradient(180deg, #0f4d73 0%, #07304d 45%, #031628 80%, #010a14 100%); }
+  .scene.cold::before {
+    content: ""; position: absolute; inset: -50%;
+    background:
+      radial-gradient(ellipse 120px 40px at 20% 30%, rgba(170,235,255,.25), transparent 70%),
+      radial-gradient(ellipse 160px 50px at 70% 20%, rgba(170,235,255,.22), transparent 70%),
+      radial-gradient(ellipse 100px 35px at 45% 60%, rgba(170,235,255,.18), transparent 70%),
+      radial-gradient(ellipse 140px 45px at 85% 70%, rgba(170,235,255,.15), transparent 70%);
+    background-size: 420px 300px; filter: blur(6px); mix-blend-mode: screen;
+    animation: caustic 14s ease-in-out infinite alternate;
+  }
+  @keyframes caustic {
+    0% { transform: translate(0,0) rotate(0deg) scale(1); }
+    100% { transform: translate(60px,40px) rotate(6deg) scale(1.12); }
+  }
+  .scene.cold::after {
+    content: ""; position: absolute; inset: 0;
+    box-shadow: inset 0 0 140px 30px rgba(200,240,255,.28);
+    background:
+      linear-gradient(180deg, rgba(220,248,255,.18), transparent 22%),
+      radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(0,8,20,.5) 100%);
+  }
+  .ray {
+    top: -10vh; height: 90vh; width: 14vw; transform-origin: top center;
+    background: linear-gradient(180deg, rgba(190,240,255,.16), transparent);
+    filter: blur(8px); animation: ray var(--d) ease-in-out infinite alternate;
+  }
+  @keyframes ray { 0% { transform: rotate(var(--r1)); opacity: .4; } 100% { transform: rotate(var(--r2)); opacity: 1; } }
+  .bubble {
+    bottom: -5vh; border-radius: 50%;
+    border: 1px solid rgba(220,248,255,.55);
+    background: radial-gradient(circle at 32% 30%, rgba(255,255,255,.65), rgba(255,255,255,.05) 45%, transparent 60%);
+    animation: bubble var(--d) ease-in infinite; animation-delay: var(--dl);
+  }
+  @keyframes bubble {
+    0% { transform: translate(0,0); opacity: 0; }
+    8% { opacity: .9; }
+    25% { transform: translate(8px,-28vh); }
+    50% { transform: translate(-8px,-56vh); }
+    75% { transform: translate(8px,-84vh); }
+    100% { transform: translate(0,-112vh); opacity: .2; }
+  }
+
+  /* --- 숲속 명상: 소나무, 햇살, 반딧불, 안개 --- */
+  .scene.rest { background: linear-gradient(180deg, #2b4a3a 0%, #1b3a2c 35%, #12291f 70%, #0a1a13 100%); }
+  .scene.rest::before {
+    content: ""; position: absolute; inset: -20% -20% 0 -20%;
+    background: repeating-linear-gradient(105deg, transparent 0 60px, rgba(255,245,200,.07) 60px 110px, transparent 110px 200px);
+    filter: blur(10px); transform-origin: top left;
+    animation: sunrays 18s ease-in-out infinite alternate;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 80%);
+    mask-image: linear-gradient(180deg, #000 0%, transparent 80%);
+  }
+  @keyframes sunrays { 0% { transform: rotate(-2deg); opacity: .6; } 100% { transform: rotate(2deg); opacity: 1; } }
+  .scene.rest .trees { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 55vh; }
+  .mist {
+    bottom: 4vh; height: 22vh; width: 160vw; left: -30vw;
+    background: radial-gradient(ellipse at center, rgba(210,235,220,.16), transparent 65%);
+    filter: blur(12px); animation: mist var(--d) ease-in-out infinite alternate;
+  }
+  @keyframes mist { 0% { transform: translateX(-8vw); } 100% { transform: translateX(8vw); } }
+  .firefly {
+    width: 4px; height: 4px; border-radius: 50%; background: #eaffa0;
+    box-shadow: 0 0 10px 3px rgba(215,255,130,.65);
+    animation: drift var(--d) ease-in-out infinite alternate, blink var(--b) ease-in-out infinite;
+    animation-delay: var(--dl), var(--dl);
+  }
+  @keyframes drift { 0% { transform: translate(0,0); } 100% { transform: translate(var(--dx), var(--dy)); } }
+  @keyframes blink { 0%,100% { opacity: 0; } 40%,60% { opacity: 1; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scene *, .scene::before, .scene::after { animation: none !important; }
+  }
+
+  /* ================= UI ================= */
+  .wrap { position: relative; z-index: 1; width: 100%; max-width: 440px; }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: 4px; text-transform: uppercase; text-align: center; margin: 0 0 18px; color: var(--muted); }
+
+  .ring-box { position: relative; width: min(260px, 70vw); aspect-ratio: 1; margin: 0 auto 8px; }
+  .ring-box > svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+  .ring-track { stroke: var(--track); }
+  .ring-bar { stroke: var(--accent); stroke-linecap: round; filter: drop-shadow(0 0 8px var(--accent)); transition: stroke 1.5s; }
+  .ring-inner { fill: rgba(0,0,0,.22); }
+  /* --- 모래시계 --- */
+  .hourglass {
+    position: absolute; left: 50%; top: 50%; width: 40%; height: 64%;
+    transform: translate(-50%, -50%); filter: drop-shadow(0 6px 14px rgba(0,0,0,.45));
+  }
+  .hg { width: 100%; height: 100%; }
+  .hg.flip { animation: hgflip 1s cubic-bezier(.65, 0, .35, 1); }
+  @keyframes hgflip { 0% { transform: rotate(0); } 100% { transform: rotate(180deg); } }
+  .hg svg { width: 100%; height: 100%; overflow: visible; display: block; }
+  .sand { fill: url(#sandGrad); }
+  .sand-stop1 { stop-color: var(--sand-hi); transition: stop-color 1.5s; }
+  .sand-stop2 { stop-color: var(--sand); transition: stop-color 1.5s; }
+  .stream {
+    stroke: var(--sand-hi); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1.6 2.4;
+    opacity: 0; transition: opacity .4s; animation: pour .35s linear infinite;
+    filter: drop-shadow(0 0 2px var(--sand));
+  }
+  body.running .stream.on { opacity: 1; }
+  @keyframes pour { to { stroke-dashoffset: -8; } }
+  .glass-fill { fill: url(#glassGrad); }
+  .glass-line { fill: none; stroke: rgba(255,255,255,.6); stroke-width: 1.1; }
+  .glass-shine { fill: none; stroke: rgba(255,255,255,.35); stroke-width: 1.6; stroke-linecap: round; }
+
+  .readout { text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.45); margin-bottom: 6px; }
+  .phase-name { font-size: 22px; font-weight: 600; color: var(--accent); transition: color 1.5s; }
+  .countdown { font-size: clamp(56px, 17vw, 80px); font-weight: 200; font-variant-numeric: tabular-nums; letter-spacing: -1px; line-height: 1.05; }
+  .meta { font-size: 13px; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { .hg.flip, .stream { animation: none; } }
+  .mood { text-align: center; font-size: 15px; color: rgba(255,255,255,.85); margin: 0 0 22px; min-height: 22px; font-style: italic; text-shadow: 0 1px 8px rgba(0,0,0,.5); transition: opacity .6s; }
+
+  .glass {
+    background: var(--glass); border: 1px solid var(--glass-line); border-radius: 16px;
+    -webkit-backdrop-filter: blur(14px) saturate(130%); backdrop-filter: blur(14px) saturate(130%);
+  }
+
+  .total { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+  .total b { color: var(--text); font-weight: 600; }
+  .total-bar { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; display: flex; margin-bottom: 22px; position: relative; }
+  .total-bar .seg { height: 100%; opacity: .45; }
+  .total-bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: #fff; opacity: .7; border-radius: 3px; }
+
+  .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  button {
+    border: 1px solid var(--glass-line); cursor: pointer; font-size: 15px; font-weight: 500; color: var(--text);
+    background: var(--glass); border-radius: 50%; width: 74px; height: 74px; font-family: inherit;
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    transition: transform .08s, opacity .15s, background .3s;
+  }
+  button:active { transform: scale(.95); }
+  button:disabled { opacity: .3; cursor: default; }
+  #startBtn {
+    width: 98px; height: 98px; font-size: 18px; color: var(--accent);
+    border: 2px solid var(--accent); background: rgba(0,0,0,.25);
+    box-shadow: 0 0 24px -6px var(--accent);
+  }
+  #startBtn.running { color: #fff; border-color: rgba(255,255,255,.5); box-shadow: none; }
+
+  .bgm { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
+  .bgm .track { flex: 1; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bgm .track b { color: var(--text); font-weight: 500; }
+  #muteBtn { width: 36px; height: 36px; font-size: 16px; border-radius: 50%; flex: none; }
+  #volume { width: 90px; accent-color: var(--accent); }
+
+  .steps { list-style: none; margin: 0 0 14px; padding: 0; overflow: hidden; }
+  .steps li { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.07); font-size: 15px; }
+  .steps li:last-child { border-bottom: none; }
+  .steps .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .steps .label { flex: 1; }
+  .steps .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .steps li.done { opacity: .35; }
+  .steps li.done .label { text-decoration: line-through; }
+  .steps li.active { background: color-mix(in srgb, var(--accent) 22%, transparent); font-weight: 600; }
+  .steps li.set-start:not(:first-child) { border-top: 1px solid rgba(255,255,255,.18); }
+
+  details { padding: 4px 14px; }
+  summary { cursor: pointer; padding: 10px 0; font-size: 15px; font-weight: 500; }
+  .setting { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.08); font-size: 15px; }
+  .setting input { width: 72px; font-size: 15px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--glass-line); background: rgba(0,0,0,.25); color: var(--text); text-align: right; font-family: inherit; }
+  .setting small { color: var(--muted); margin-left: 6px; }
+  .sum { padding: 10px 0 12px; border-top: 1px solid rgba(255,255,255,.08); font-size: 14px; color: var(--muted); display: flex; justify-content: space-between; }
+  .sum b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
+</style>
+</head>
+<body data-phase="sauna">
+<div id="scenes">
+  <div class="scene sauna on" id="scene-sauna"></div>
+  <div class="scene cold" id="scene-cold"></div>
+  <div class="scene rest" id="scene-rest"></div>
+</div>
+
+<div class="wrap">
+  <h1>Totonoi · ととのい</h1>
+
+  <div class="ring-box">
+    <svg viewBox="0 0 200 200">
+      <circle class="ring-inner" cx="100" cy="100" r="84"/>
+      <circle class="ring-track" cx="100" cy="100" r="92" fill="none" stroke-width="6"/>
+      <circle class="ring-bar" id="ringBar" cx="100" cy="100" r="92" fill="none" stroke-width="6"/>
+    </svg>
+    <div class="hourglass">
+      <div class="hg" id="hg">
+        <svg viewBox="0 0 100 160" aria-hidden="true">
+          <defs>
+            <linearGradient id="woodGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#b07a48"/><stop offset=".5" stop-color="#7a4a26"/><stop offset="1" stop-color="#4e2c14"/>
+            </linearGradient>
+            <linearGradient id="postGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#5a341a"/><stop offset=".5" stop-color="#a0703f"/><stop offset="1" stop-color="#5a341a"/>
+            </linearGradient>
+            <linearGradient id="glassGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="rgba(255,255,255,.16)"/><stop offset=".35" stop-color="rgba(255,255,255,.04)"/>
+              <stop offset=".8" stop-color="rgba(255,255,255,.02)"/><stop offset="1" stop-color="rgba(255,255,255,.12)"/>
+            </linearGradient>
+            <linearGradient id="sandGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop class="sand-stop1" offset="0"/><stop class="sand-stop2" offset="1"/>
+            </linearGradient>
+            <clipPath id="clipTop"><path d="M23,14 H77 C77,46 55,63 53,80 H47 C45,63 23,46 23,14 Z"/></clipPath>
+            <clipPath id="clipBot"><path d="M47,80 H53 C55,97 77,114 77,146 H23 C23,114 45,97 47,80 Z"/></clipPath>
+          </defs>
+          <!-- 기둥 -->
+          <rect x="12" y="10" width="4" height="140" rx="2" fill="url(#postGrad)"/>
+          <rect x="84" y="10" width="4" height="140" rx="2" fill="url(#postGrad)"/>
+          <!-- 유리 안쪽 -->
+          <path class="glass-fill" d="M22,12 H78 C78,45 55,62 53,80 C55,98 78,115 78,148 H22 C22,115 45,98 47,80 C45,62 22,45 22,12 Z"/>
+          <!-- 모래 -->
+          <g clip-path="url(#clipTop)"><rect class="sand" id="sandTop" x="0" y="24" width="100" height="56"/></g>
+          <g clip-path="url(#clipBot)"><polygon class="sand" id="sandBot" points="0,146 100,146 100,146 50,146 0,146"/></g>
+          <line class="stream" id="stream" x1="50" y1="79" x2="50" y2="146"/>
+          <!-- 유리 테두리와 반사광 -->
+          <path class="glass-line" d="M22,12 H78 C78,45 55,62 53,80 C55,98 78,115 78,148 H22 C22,115 45,98 47,80 C45,62 22,45 22,12 Z"/>
+          <path class="glass-shine" d="M29,20 C29,40 38,54 44,64"/>
+          <path class="glass-shine" d="M29,140 C29,124 36,110 42,100" opacity=".6"/>
+          <!-- 위아래 나무 받침 -->
+          <rect x="6" y="3" width="88" height="10" rx="3" fill="url(#woodGrad)"/>
+          <rect x="6" y="147" width="88" height="10" rx="3" fill="url(#woodGrad)"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="readout">
+    <div class="phase-name" id="phaseName">사우나</div>
+    <div class="countdown" id="countdown">10:00</div>
+    <div class="meta"><span id="phaseSet">1 / 3 세트</span> · <span id="nextText">다음: 냉수욕</span></div>
+  </div>
+  <p class="mood" id="mood"></p>
+
+  <div class="total">
+    <span>경과 <b id="totalElapsed">00:00</b></span>
+    <span>남은 시간 <b id="totalRemain">60:00</b></span>
+  </div>
+  <div class="total-bar" id="totalBar"></div>
+
+  <div class="controls">
+    <button id="resetBtn" disabled>처음부터</button>
+    <button id="startBtn">시작</button>
+    <button id="skipBtn">다음 ▶</button>
+  </div>
+
+  <div class="bgm glass">
+    <button id="muteBtn" title="BGM 켜기/끄기">🔊</button>
+    <span class="track" id="trackName">♪ <b>BGM</b> · 시작하면 재생돼요</span>
+    <input type="range" id="volume" min="0" max="100" value="60" aria-label="BGM 볼륨">
+  </div>
+
+  <ul class="steps glass" id="steps"></ul>
+
+  <details id="settings" class="glass">
+    <summary>시간 설정</summary>
+    <div class="setting"><span>🔥 사우나</span><span><input type="number" id="inSauna" min="1" max="30" step="0.5" value="10"><small>분</small></span></div>
+    <div class="setting"><span>🧊 냉수욕</span><span><input type="number" id="inCold" min="0.5" max="10" step="0.5" value="2"><small>분</small></span></div>
+    <div class="setting"><span>🌲 외기욕</span><span><input type="number" id="inRest" min="1" max="30" step="0.5" value="8"><small>분</small></span></div>
+    <div class="setting"><span>세트 수</span><span><input type="number" id="inSets" min="1" max="6" step="1" value="3"><small>세트</small></span></div>
+    <div class="sum"><span>총 소요 시간 (목표 60분)</span><b id="sumText">60:00</b></div>
+  </details>
+
+  <p class="hint">Space: 시작/일시정지 · N: 다음 단계 · M: BGM 켜기/끄기</p>
+</div>
+
+<script>
+  const PHASES = {
+    sauna: { name: '사우나', icon: '🔥', color: '#ff9a4d', track: '핀란드 사우나 — 장작 타는 소리 · 칸텔레 · 로울뤼',
+             moods: ['뜨거운 증기에 몸을 맡기세요', '코로 천천히 숨 쉬어요', '어깨 힘을 빼고, 땀이 흐르게', '힘들면 언제든 나와도 괜찮아요'] },
+    cold:  { name: '냉수욕', icon: '🧊', color: '#6fd3ff', track: '콜드 플런지 — 물속의 울림 · 기포 · 얼음 종소리',
+             moods: ['길게 내쉬며 천천히 들어가요', '숨을 길게, 마음은 고요하게', '차가움 속의 날카로운 맑음', '천천히 나올 준비를 해요'] },
+    rest:  { name: '외기욕', icon: '🌲', color: '#8fe08a', track: '숲속 명상 — 바람 · 새소리 · 싱잉볼',
+             moods: ['눈을 감고 몸을 기대세요', '심장 박동이 잦아드는 걸 느껴요', '몸이 가볍게 떠오르는 순간', '지금, 토토노이'] },
+  };
+  const $ = id => document.getElementById(id);
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const RING_LEN = 2 * Math.PI * 92;
+  $('ringBar').style.strokeDasharray = RING_LEN;
+
+  /* ================= 배경 장면 생성 ================= */
+  function particles(sceneId, cls, n, styleFn) {
+    const host = $(sceneId);
+    for (let i = 0; i < n; i++) {
+      const el = document.createElement('div');
+      el.className = 'p ' + cls;
+      const st = styleFn(i);
+      for (const k in st) el.style.setProperty(k, st[k]);
+      host.appendChild(el);
+    }
+  }
+  // 사우나
+  particles('scene-sauna', 'steam', 14, () => {
+    const s = rnd(25, 55);
+    return { left: rnd(-10, 90) + 'vw', width: s + 'vw', height: s + 'vw',
+             '--d': rnd(14, 26) + 's', '--dl': -rnd(0, 26) + 's', '--dx': rnd(-15, 15) + 'vw' };
+  });
+  particles('scene-sauna', 'ember', 22, () => ({
+    left: rnd(25, 75) + 'vw', '--d': rnd(4, 9) + 's', '--dl': -rnd(0, 9) + 's', '--dx': rnd(-12, 12) + 'vw',
+  }));
+  // 콜드 플런지
+  particles('scene-cold', 'ray', 5, i => ({
+    left: (i * 20 + rnd(0, 10)) + 'vw', '--d': rnd(7, 12) + 's', '--r1': rnd(-12, -4) + 'deg', '--r2': rnd(4, 12) + 'deg',
+  }));
+  particles('scene-cold', 'bubble', 30, () => {
+    const s = Math.pow(Math.random(), 2) * 14 + 3;
+    return { left: rnd(0, 100) + 'vw', width: s + 'px', height: s + 'px',
+             '--d': rnd(6, 14) + 's', '--dl': -rnd(0, 14) + 's' };
+  });
+  // 숲
+  (function trees() {
+    const W = 1200, H = 400;
+    const pine = (x, h, w) => {
+      let pts = '';
+      for (let t = 0; t < 4; t++) {
+        const top = H - h + t * h * 0.2, bot = top + h * 0.38, ww = w * (0.45 + t * 0.2);
+        pts += `<polygon points="${x},${top} ${x - ww},${bot} ${x + ww},${bot}"/>`;
+      }
+      return pts + `<rect x="${x - w * 0.06}" y="${H - h * 0.1}" width="${w * 0.12}" height="${h * 0.1}"/>`;
+    };
+    const layer = (n, hMin, hMax, color, op) => {
+      let s = `<g fill="${color}" opacity="${op}">`;
+      for (let i = 0; i < n; i++) { const h = rnd(hMin, hMax); s += pine(rnd(-40, W + 40), h, h * rnd(0.22, 0.3)); }
+      return s + '</g>';
+    };
+    $('scene-rest').insertAdjacentHTML('beforeend',
+      `<svg class="trees" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice">
+        ${layer(22, 160, 260, '#2f5a45', .55)}${layer(16, 220, 330, '#1d3d2e', .85)}${layer(10, 280, 400, '#0c2219', 1)}
+      </svg>`);
+  })();
+  particles('scene-rest', 'mist', 2, () => ({ '--d': rnd(16, 24) + 's' }));
+  particles('scene-rest', 'firefly', 26, () => ({
+    left: rnd(0, 100) + 'vw', top: rnd(35, 95) + 'vh', '--d': rnd(6, 14) + 's', '--b': rnd(2.5, 5) + 's',
+    '--dl': -rnd(0, 10) + 's', '--dx': rnd(-60, 60) + 'px', '--dy': rnd(-60, 60) + 'px',
+  }));
+
+  let sceneType = 'sauna';
+  function setScene(type) {
+    if (type === sceneType) return;
+    sceneType = type;
+    document.body.dataset.phase = type;
+    for (const k of ['sauna', 'cold', 'rest']) $('scene-' + k).classList.toggle('on', k === type);
+  }
+
+  /* ================= 타이머 상태 ================= */
+  let steps = [], total = 0;
+  let running = false, startAt = 0, elapsed = 0, lastIdx = 0, finished = false;
+  let timer = null, wakeLock = null;
+
+  function buildSteps() {
+    const d = { sauna: +$('inSauna').value || 10, cold: +$('inCold').value || 2, rest: +$('inRest').value || 8 };
+    const sets = Math.max(1, Math.min(6, Math.round(+$('inSets').value || 3)));
+    steps = []; let t = 0;
+    for (let s = 1; s <= sets; s++)
+      for (const type of ['sauna', 'cold', 'rest']) {
+        const dur = Math.round(d[type] * 60000);
+        steps.push({ type, set: s, dur, start: t }); t += dur;
+      }
+    total = t;
+    $('sumText').textContent = fmt(total);
+    $('sumText').style.color = total === 3600000 ? '' : '#ffb27a';
+    $('steps').innerHTML = steps.map((st, i) => {
+      const p = PHASES[st.type];
+      return `<li class="${st.type === 'sauna' ? 'set-start' : ''}">
+        <span class="dot" style="background:${p.color};box-shadow:0 0 8px ${p.color}"></span>
+        <span class="label">${st.set}세트 · ${p.icon} ${p.name}</span>
+        <span class="dur">${fmt(st.dur)}</span></li>`;
+    }).join('');
+    $('totalBar').innerHTML = steps.map(st =>
+      `<div class="seg" style="width:${st.dur / total * 100}%;background:${PHASES[st.type].color}"></div>`
+    ).join('') + '<div class="fill" id="totalFill"></div>';
+  }
+
+  function fmt(ms) {
+    const sec = Math.max(0, Math.ceil(ms / 1000));
+    return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+  }
+  const fmtUp = ms => fmt(Math.floor(ms / 1000) * 1000);
+  const now = () => running ? Date.now() - startAt : elapsed;
+  const indexAt = t => { for (let i = steps.length - 1; i >= 0; i--) if (t >= steps[i].start) return i; return 0; };
+
+  /* ================= 모래시계 ================= */
+  let flipping = false;
+  function drawHourglass(frac) {
+    if (flipping) frac = 1;                       // 뒤집히는 동안은 아래가 가득 찬 모습 유지
+    frac = Math.max(0, Math.min(1, frac));
+    const remain = 1 - frac;
+    // 위: 넓은 쪽이 위에 있으니 부피 기준으로 높이 보정
+    const topDepth = Math.pow(remain, 1 / 1.6) * 56;
+    const topY = 80 - topDepth;
+    $('sandTop').setAttribute('y', topY);
+    $('sandTop').setAttribute('height', Math.max(0, topDepth));
+    // 아래: 쌓이는 모래 더미
+    const h = (1 - Math.pow(1 - frac, 1 / 1.6)) * 44;
+    const pile = frac > 0 ? Math.min(8, 2 + frac * 24) * (1 - frac * 0.5) : 0;
+    const surf = 146 - h;
+    $('sandBot').setAttribute('points', `0,146 100,146 100,${surf} 62,${surf - pile * .7} 50,${surf - pile} 38,${surf - pile * .7} 0,${surf}`);
+    $('stream').setAttribute('y2', surf - pile);
+    $('stream').classList.toggle('on', frac < 1 && !flipping);
+  }
+  function flipHourglass() {
+    const el = $('hg');
+    flipping = true;
+    el.classList.remove('flip'); void el.offsetWidth; el.classList.add('flip');
+  }
+  $('hg').addEventListener('animationend', () => { $('hg').classList.remove('flip'); flipping = false; render(); });
+
+  let moodKey = '';
+  function setMood(type, inStep, dur) {
+    const moods = PHASES[type].moods;
+    const mi = Math.min(moods.length - 1, Math.floor(inStep / dur * moods.length));
+    const key = type + mi;
+    if (key === moodKey) return;
+    moodKey = key;
+    const el = $('mood');
+    el.style.opacity = 0;
+    setTimeout(() => { el.textContent = moods[mi]; el.style.opacity = 1; }, 400);
+  }
+
+  function render() {
+    const t = Math.min(now(), total);
+    const idx = finished ? steps.length - 1 : indexAt(t);
+    const st = steps[idx], p = PHASES[st.type];
+    const inStep = t - st.start, remain = st.dur - inStep;
+    setScene(finished ? 'rest' : st.type);
+
+    if (finished) {
+      $('phaseName').textContent = '토토노이 ✨';
+      $('phaseSet').textContent = `${st.set}세트 모두 끝`;
+      $('countdown').textContent = '00:00';
+      $('nextText').textContent = '수고하셨어요';
+      $('ringBar').style.strokeDashoffset = 0;
+      moodKey = 'done'; $('mood').textContent = '오늘도 잘 정돈되었어요'; $('mood').style.opacity = 1;
+    } else {
+      $('phaseName').textContent = `${p.icon} ${p.name}`;
+      $('phaseSet').textContent = `${st.set} / ${steps[steps.length - 1].set} 세트`;
+      $('countdown').textContent = fmt(remain);
+      const nx = steps[idx + 1];
+      $('nextText').textContent = nx ? `다음: ${PHASES[nx.type].name}` : '마지막 단계';
+      $('ringBar').style.strokeDashoffset = RING_LEN * (1 - inStep / st.dur);
+      setMood(st.type, inStep, st.dur);
+    }
+    drawHourglass(finished ? 1 : inStep / st.dur);
+    $('totalElapsed').textContent = fmtUp(t);
+    $('totalRemain').textContent = fmt(total - t);
+    $('totalFill').style.width = (t / total * 100) + '%';
+    document.querySelectorAll('#steps li').forEach((li, i) => {
+      li.classList.toggle('done', finished || i < idx);
+      li.classList.toggle('active', !finished && i === idx && (running || t > 0));
+    });
+    document.title = finished ? '완료 · 토토노이' : `${fmt(remain)} ${p.name} · 토토노이`;
+  }
+
+  function loop() {
+    const t = now();
+    if (t >= total) { finish(); return; }
+    const idx = indexAt(t);
+    if (idx !== lastIdx) { lastIdx = idx; flipHourglass(); alertPhase(steps[idx].type); bgm.play(steps[idx].type); }
+    render();
+  }
+
+  function finish() {
+    running = false; finished = true; elapsed = total;
+    clearInterval(timer); releaseWake();
+    bgm.stop(); alertPhase('done');
+    updateButtons(); render();
+  }
+  function start() {
+    if (finished) return;
+    ensureAudio();
+    startAt = Date.now() - elapsed;
+    running = true;
+    lastIdx = indexAt(elapsed);
+    if (elapsed === 0) beep([880], 0.15);
+    bgm.play(steps[lastIdx].type);
+    timer = setInterval(loop, 200);
+    requestWake();
+    updateButtons(); loop();
+  }
+  function pause() {
+    elapsed = Date.now() - startAt;
+    running = false;
+    clearInterval(timer); releaseWake(); bgm.stop();
+    updateButtons(); render();
+  }
+  function skip() {
+    if (finished) return;
+    const idx = indexAt(now());
+    if (idx >= steps.length - 1) { finish(); return; }
+    const target = steps[idx + 1].start;
+    if (running) startAt = Date.now() - target; else elapsed = target;
+    lastIdx = idx + 1;
+    flipHourglass();
+    ensureAudio();
+    alertPhase(steps[idx + 1].type);
+    if (running) bgm.play(steps[idx + 1].type);
+    updateButtons(); render();
+  }
+  function reset() {
+    running = false; finished = false; elapsed = 0; lastIdx = 0;
+    clearInterval(timer); releaseWake(); bgm.stop();
+    updateButtons(); render();
+  }
+  function updateButtons() {
+    $('startBtn').textContent = running ? '일시정지' : (elapsed > 0 && !finished ? '계속' : '시작');
+    $('startBtn').classList.toggle('running', running);
+    document.body.classList.toggle('running', running);
+    $('startBtn').disabled = finished;
+    $('resetBtn').disabled = running || (elapsed === 0 && !finished);
+    $('skipBtn').disabled = finished;
+    const locked = running || elapsed > 0;
+    document.querySelectorAll('#settings input').forEach(el => el.disabled = locked);
+  }
+
+  /* ================= 오디오 엔진 ================= */
+  let ctx = null, master = null, bgmBus = null, noiseBuf = null;
+  let bgmOn = true, bgmVol = 0.6;
+  try {
+    const saved = JSON.parse(localStorage.getItem('totonoi-bgm') || 'null');
+    if (saved) { bgmOn = saved.on; bgmVol = saved.vol; }
+  } catch (e) {}
+  const saveBgm = () => { try { localStorage.setItem('totonoi-bgm', JSON.stringify({ on: bgmOn, vol: bgmVol })); } catch (e) {} };
+
+  function ensureAudio() {
+    try {
+      if (!ctx) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        master = ctx.createGain(); master.connect(ctx.destination);
+        bgmBus = ctx.createGain(); bgmBus.gain.value = bgmOn ? bgmVol : 0; bgmBus.connect(master);
+        noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (e) {}
+  }
+  function applyBgmVolume() {
+    if (bgmBus) bgmBus.gain.setTargetAtTime(bgmOn ? bgmVol : 0, ctx.currentTime, 0.2);
+    $('muteBtn').textContent = bgmOn ? '🔊' : '🔇';
+    $('volume').value = Math.round(bgmVol * 100);
+  }
+
+  /* 사운드 재료 */
+  function makeScene() {
+    const out = ctx.createGain(); out.gain.value = 0; out.connect(bgmBus);
+    // 공간감용 딜레이
+    const delay = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain();
+    delay.delayTime.value = 0.38; fb.gain.value = 0.38; wet.gain.value = 0.5;
+    delay.connect(fb).connect(delay); delay.connect(wet).connect(out);
+    const sc = { out, fx: delay, srcs: [], timers: new Set(), alive: true };
+    sc.every = (fn, min, max, first = rnd(0, max)) => {
+      const tick = () => { if (!sc.alive) return; fn(); sc.timers.delete(id); id = setTimeout(tick, rnd(min, max)); sc.timers.add(id); };
+      let id = setTimeout(tick, first); sc.timers.add(id);
+    };
+    sc.keep = node => { sc.srcs.push(node); return node; };
+    return sc;
+  }
+  function noise() { const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.loopStart = rnd(0, 1); return s; }
+  function filter(type, freq, q = 1) { const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; return f; }
+  function gain(v) { const g = ctx.createGain(); g.gain.value = v; return g; }
+  function lfo(sc, rate, depth, target) {
+    const o = sc.keep(ctx.createOscillator()), g = gain(depth);
+    o.frequency.value = rate; o.connect(g).connect(target); o.start();
+  }
+  function tone(dest, { freq, type = 'sine', vol = .1, attack = .005, decay = 1, glideTo, glideTime, at = 0 }) {
+    const t = ctx.currentTime + at;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t + glideTime);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+    o.connect(g).connect(dest); o.start(t); o.stop(t + attack + decay + .05);
+  }
+  function burst(dest, { dur, type, freq, q = 1, vol, attack = .002 }) {
+    const t = ctx.currentTime;
+    const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+    const f = filter(type, freq, q), g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + dur);
+    s.connect(f).connect(g).connect(dest);
+    s.start(t, rnd(0, 1.5)); s.stop(t + attack + dur + .05);
+  }
+  function bell(dest, freq, vol, decay) {
+    [[1, 1], [2.76, .45], [5.4, .2], [8.9, .08]].forEach(([r, v]) =>
+      tone(dest, { freq: freq * r, vol: vol * v, attack: .004, decay: decay / Math.sqrt(r) }));
+  }
+
+  /* --- 핀란드 사우나 --- */
+  function saunaMusic(sc) {
+    // 낮은 드론 (A, E)
+    const lp = filter('lowpass', 260, 2); const dg = gain(.07);
+    [55, 82.4, 110.2].forEach(f => { const o = sc.keep(ctx.createOscillator()); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = rnd(-6, 6); o.connect(lp); o.start(); });
+    lp.connect(dg).connect(sc.out);
+    lfo(sc, .06, 90, lp.frequency);
+    // 스토브 웅웅거림
+    const n = sc.keep(noise()); n.connect(filter('lowpass', 140)).connect(gain(.12)).connect(sc.out); n.start();
+    // 장작 타닥타닥
+    sc.every(() => {
+      const big = Math.random() < .08;
+      burst(sc.out, { dur: big ? rnd(.02, .05) : rnd(.003, .015), type: 'bandpass', freq: rnd(1200, 5500), q: rnd(.8, 3), vol: big ? rnd(.25, .45) : Math.pow(Math.random(), 2) * .25 });
+    }, 40, 280);
+    // 로울뤼: 돌에 물 끼얹는 소리
+    sc.every(() => {
+      burst(sc.out, { dur: .25, type: 'lowpass', freq: 900, vol: .18, attack: .01 });
+      setTimeout(() => sc.alive && burst(sc.out, { dur: rnd(3.5, 5), type: 'highpass', freq: 2800, vol: .09, attack: .35 }), 120);
+    }, 22000, 38000, 6000);
+    // 칸텔레 (D 단조 5음계)
+    const scale = [293.66, 349.23, 392, 440, 523.25, 587.33, 698.46];
+    sc.every(() => {
+      const n = 1 + Math.floor(Math.random() * 3); let i = Math.floor(Math.random() * scale.length);
+      for (let k = 0; k < n; k++) {
+        i = Math.max(0, Math.min(scale.length - 1, i + pick([-2, -1, 1, 2])));
+        const f = scale[i], at = k * rnd(.28, .45);
+        tone(sc.out, { freq: f, type: 'triangle', vol: .07, decay: 2.2, at });
+        tone(sc.out, { freq: f * 2, vol: .02, decay: 1.2, at });
+        tone(sc.fx,  { freq: f, type: 'triangle', vol: .03, decay: 2.2, at });
+      }
+    }, 2600, 6000, 1500);
+  }
+
+  /* --- 콜드 플런지 --- */
+  function coldMusic(sc) {
+    // 물속 울림
+    const n = sc.keep(noise()); const lp = filter('lowpass', 320); const ng = gain(.22);
+    n.connect(lp).connect(ng).connect(sc.out); n.start();
+    lfo(sc, .13, .08, ng.gain); lfo(sc, .05, 120, lp.frequency);
+    // 차가운 고음 패드 (E, B)
+    const pg = gain(.018);
+    [659.25, 987.77, 1318.5].forEach(f => { const o = sc.keep(ctx.createOscillator()); o.frequency.value = f; o.detune.value = rnd(-8, 8); o.connect(pg); o.start(); });
+    pg.connect(sc.out); pg.connect(sc.fx);
+    lfo(sc, .2, .01, pg.gain);
+    // 보글보글 기포
+    sc.every(() => {
+      const cnt = Math.random() < .25 ? 3 + Math.floor(Math.random() * 4) : 1;
+      for (let k = 0; k < cnt; k++) {
+        const f = rnd(280, 750);
+        tone(sc.out, { freq: f, vol: rnd(.03, .07), attack: .003, decay: rnd(.05, .1), glideTo: f * rnd(2, 3), glideTime: rnd(.05, .1), at: k * rnd(.04, .12) });
+      }
+    }, 180, 1100);
+    // 얼음 종소리
+    const ice = [1567.98, 1760, 2093, 2349.3, 2637];
+    sc.every(() => { const f = pick(ice); bell(sc.out, f, .035, 3); bell(sc.fx, f, .02, 3); }, 3000, 7000, 800);
+  }
+
+  /* --- 숲속 명상 --- */
+  function forestMusic(sc) {
+    // 바람
+    const n = sc.keep(noise()); const bp = filter('bandpass', 500, .6); const wg = gain(.05);
+    n.connect(bp).connect(wg).connect(sc.out); n.start();
+    lfo(sc, .07, 280, bp.frequency); lfo(sc, .09, .025, wg.gain);
+    // 잔잔한 코드 패드
+    const chords = [
+      [130.81, 196, 246.94, 293.66, 329.63],   // Cmaj9
+      [110, 164.81, 246.94, 261.63, 329.63],   // Am9
+      [87.31, 174.61, 220, 261.63, 329.63],    // Fmaj9
+      [98, 196, 246.94, 293.66, 329.63],       // G6/9
+    ];
+    let ci = 0;
+    const padLp = filter('lowpass', 1100); padLp.connect(sc.out); padLp.connect(sc.fx);
+    const playChord = () => {
+      const t = ctx.currentTime, len = 11;
+      chords[ci++ % chords.length].forEach(f => {
+        ['sine', 'triangle'].forEach((type, j) => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = type; o.frequency.value = f; o.detune.value = j ? 7 : -7;
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(j ? .012 : .022, t + 3.5);
+          g.gain.setValueAtTime(j ? .012 : .022, t + len - 4);
+          g.gain.linearRampToValueAtTime(0.0001, t + len);
+          o.connect(g).connect(padLp); o.start(t); o.stop(t + len + .1);
+        });
+      });
+    };
+    sc.every(playChord, 9000, 9000, 0);
+    // 새소리
+    sc.every(() => {
+      const base = rnd(2200, 3800), cnt = 2 + Math.floor(Math.random() * 4), up = Math.random() < .6;
+      for (let k = 0; k < cnt; k++)
+        tone(sc.out, { freq: base, vol: .035, attack: .01, decay: .09, glideTo: base * (up ? 1.35 : .75), glideTime: .08, at: k * rnd(.11, .16) });
+    }, 3500, 9000, 2000);
+    // 싱잉볼
+    sc.every(() => { bell(sc.out, 196, .09, 9); bell(sc.fx, 196, .03, 9); }, 24000, 36000, 1200);
+  }
+
+  const MUSIC = { sauna: saunaMusic, cold: coldMusic, rest: forestMusic };
+  const bgm = {
+    cur: null, type: null,
+    play(type) {
+      if (!ctx || this.type === type) return;
+      this.stop();
+      const sc = makeScene();
+      MUSIC[type](sc);
+      sc.out.gain.setTargetAtTime(1, ctx.currentTime, 1);
+      this.cur = sc; this.type = type;
+      $('trackName').innerHTML = `♪ <b>${PHASES[type].track.split(' — ')[0]}</b> — ${PHASES[type].track.split(' — ')[1]}`;
+    },
+    stop() {
+      const sc = this.cur; if (!sc) return;
+      sc.alive = false; sc.timers.forEach(clearTimeout);
+      sc.out.gain.cancelScheduledValues(ctx.currentTime);
+      sc.out.gain.setTargetAtTime(0, ctx.currentTime, .6);
+      setTimeout(() => { sc.srcs.forEach(s => { try { s.stop(); } catch (e) {} }); sc.out.disconnect(); }, 4000);
+      this.cur = null; this.type = null;
+    },
+  };
+
+  /* --- 단계 전환 알림 --- */
+  function beep(freqs, len = .18, gap = .08) {
+    if (!ctx) return;
+    let t = ctx.currentTime + .02;
+    for (const f of freqs) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, t);
+      g.gain.exponentialRampToValueAtTime(.35, t + .01);
+      g.gain.exponentialRampToValueAtTime(.0001, t + len);
+      o.connect(g).connect(master); o.start(t); o.stop(t + len + .02);
+      t += len + gap;
+    }
+  }
+  function alertPhase(type) {
+    const tones = { sauna: [523, 659, 784], cold: [1046, 1046, 1046], rest: [784, 659, 523], done: [523, 659, 784, 1046, 784, 1046] };
+    beep(tones[type] || [880]);
+    try { navigator.vibrate && navigator.vibrate(type === 'done' ? [300, 150, 300, 150, 600] : [250, 120, 250]); } catch (e) {}
+  }
+
+  /* --- 화면 꺼짐 방지 --- */
+  async function requestWake() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+  function releaseWake() { try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null; }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && running) { requestWake(); loop(); }
+  });
+
+  /* ================= 이벤트 ================= */
+  const toggleMute = () => { bgmOn = !bgmOn; applyBgmVolume(); saveBgm(); };
+  $('startBtn').addEventListener('click', () => running ? pause() : start());
+  $('skipBtn').addEventListener('click', skip);
+  $('resetBtn').addEventListener('click', reset);
+  $('muteBtn').addEventListener('click', toggleMute);
+  $('volume').addEventListener('input', e => { bgmVol = e.target.value / 100; if (bgmVol > 0) bgmOn = true; applyBgmVolume(); saveBgm(); });
+  document.querySelectorAll('#settings input').forEach(el => el.addEventListener('input', () => { buildSteps(); render(); }));
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); running ? pause() : start(); }
+    else if (e.key === 'n' || e.key === 'N') skip();
+    else if (e.key === 'm' || e.key === 'M') toggleMute();
+  });
+
+  buildSteps(); applyBgmVolume(); updateButtons(); render();
+</script>
+</body>
+</html>
